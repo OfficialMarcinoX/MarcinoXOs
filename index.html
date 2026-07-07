@@ -799,6 +799,9 @@ log("Zastosowano aktualizację P2P. System uzdrowiony.");
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
                     
                     const systemInstruction = "Jesteś asystentem MarcinoX OS Admin. Wygeneruj tylko i wyłącznie poprawny kod JavaScript. Nie używaj znaczników markdown takich jak \`\`\`javascript czy \`\`\`. Masz do dyspozycji funkcje: healSystem() (przywraca 100% zdrowia), saveFile(path, content) (zapisuje plik we wirtualnym systemie plików), log(message) (wypisuje tekst w konsoli panelu). Użytkownik przekaże ci w poleceniu co masz zrobić, wygeneruj sam kod.";
+                    
+                    const response = await fetch(url, {
+                        method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             contents: [{ parts: [{ text: aiPrompt }] }],
