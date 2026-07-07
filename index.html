@@ -1,1 +1,719 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarcinoX OS Environment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; user-select: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .window { box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .glitch-1 { filter: hue-rotate(90deg) blur(1px); animation: shake 0.5s infinite; }
+        .glitch-2 { filter: invert(20%) sepia(50%) saturate(400%) hue-rotate(180deg); animation: shake 0.2s infinite; }
+        .glitch-3 { filter: contrast(200%) brightness(150%) blur(2px); animation: skew 2s infinite; }
+        
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        @keyframes skew {
+            0% { transform: skewX(0deg); }
+            5% { transform: skewX(2deg); }
+            10% { transform: skewX(0deg); }
+            100% { transform: skewX(0deg); }
+        }
 
+        /* Niestandardowy Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- CONSTANTS & DEFAULT VFS ---
+        const SETUP_STEPS = [
+            "Wybór regionu (Polska)", "Układ klawiatury (Polski - Programisty)", "Dodatkowy układ klawiatury", 
+            "Nawiązywanie połączenia P2P...", "Sprawdzanie aktualizacji węzłów", "Akceptacja Licencji MarcinoX (EULA)", 
+            "Przeznaczenie maszyny wirtualnej", "Konfiguracja Konta Offline", "Tworzenie loginu (planexd_0)", 
+            "Konfiguracja haseł głównych", "Ustawienia prywatności - Zbieranie Logów", "Ustawienia prywatności - Telemetria", 
+            "Ustawienia prywatności - Pismo odręczne", "Ustawienia prywatności - Identyfikator węzła", 
+            "Inicjalizacja usługi BITS (Background Intelligent Transfer Service)", "Rejestracja w sieci P2P", 
+            "Tworzenie systemu plików...", "Kompilowanie jądra graficznego 3D", "Ostatnie poprawki wydajnościowe...", 
+            "Prawie gotowe. Przygotowywanie pulpitu..."
+        ];
+
+        const DEFAULT_VFS = {
+            "C:": { type: "dir", children: ["Windows", "Users", "P2P_Updates"] },
+            "C:/Windows": { type: "dir", children: ["System32"] },
+            "C:/Windows/System32": { type: "dir", children: ["cmd.exe", "bits.dll"] },
+            "C:/Windows/System32/cmd.exe": { type: "file", content: "MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xFF\xFF..." },
+            "C:/Windows/System32/bits.dll": { type: "file", content: "Błąd: BITS wymaga aktualizacji. System może odczuwać ból." },
+            "C:/Users": { type: "dir", children: ["planexd_0"] },
+            "C:/Users/planexd_0": { type: "dir", children: ["Pulpit", "Dokumenty"] },
+            "C:/Users/planexd_0/Pulpit": { type: "dir", children: ["Witaj.txt"] },
+            "C:/Users/planexd_0/Pulpit/Witaj.txt": { type: "file", content: "Witaj w nowym systemie MarcinoX OS!\n\nTo jest w pełni funkcjonalny system zapisujący dane w przeglądarce.\nUżyj dopisku #7319112 w URL aby wejść w tryb Admina i wypuścić łatkę na ból systemu!" },
+            "C:/Users/planexd_0/Dokumenty": { type: "dir", children: [] },
+            "C:/P2P_Updates": { type: "dir", children: [] }
+        };
+
+        // --- ICONS (SVG) ---
+        const Icon = ({ name, className = "w-6 h-6", fill = "currentColor" }) => {
+            const icons = {
+                folder: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#fbbf24" className={className}><path d="M19.5 21a3 3 0 0 0 3-3v-4.5a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3V18a3 3 0 0 0 3 3h15ZM1.5 10.146V6a3 3 0 0 1 3-3h5.379a2.25 2.25 0 0 1 1.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 0 1 3 3v1.146A4.483 4.483 0 0 0 19.5 9h-15a4.483 4.483 0 0 0-3 1.146Z" /></svg>,
+                file: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#f8fafc" className={className}><path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0 0 16.5 9h-1.875a1.875 1.875 0 0 1-1.875-1.875V5.25A3.75 3.75 0 0 0 9 1.5H5.625ZM7.5 15a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5A.75.75 0 0 1 7.5 15Zm.75 2.25a.75.75 0 0 0 0 1.5H12a.75.75 0 0 0 0-1.5H8.25Z" /><path d="M12.971 1.816A5.23 5.23 0 0 1 14.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 0 1 3.434 1.279 9.768 9.768 0 0 0-6.963-6.963Z" /></svg>,
+                notepad: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#60a5fa" className={className}><path fillRule="evenodd" d="M2.25 4.5A.75.75 0 0 1 3 3.75h14.25a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75Zm0 4.5A.75.75 0 0 1 3 8.25h9.75a.75.75 0 0 1 0 1.5H3A.75.75 0 0 1 2.25 9Zm15-.75A.75.75 0 0 1 18 9v10.19l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3.75 3.75a.75.75 0 0 1-1.06 0l-3.75-3.75a.75.75 0 1 1 1.06-1.06l2.47 2.47V9a.75.75 0 0 1 .75-.75Zm-15 5.25a.75.75 0 0 1 .75-.75h9.75a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75Z" clipRule="evenodd" /></svg>,
+                edge: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm14.024-.983a2.25 2.25 0 0 1-1.482 2.19l-4.5 1.5a2.25 2.25 0 0 1-2.92-2.186V10.5a2.25 2.25 0 0 1 1.482-2.19l4.5-1.5a2.25 2.25 0 0 1 2.92 2.186v2.021Z" clipRule="evenodd" /></svg>,
+                windows: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#0ea5e9" className={className}><path d="M22.5 11.25V3a.75.75 0 0 0-.856-.743l-9 1.286A.75.75 0 0 0 12 4.286v6.964h10.5ZM10.5 11.25V4.5a.75.75 0 0 0-.643-.743L3.143 2.786A.75.75 0 0 0 2.25 3.536v7.714H10.5ZM22.5 12.75H12v6.964a.75.75 0 0 0 .644.743l9 1.286a.75.75 0 0 0 .856-.743v-8.25ZM10.5 12.75H2.25v7.714a.75.75 0 0 0 .893.743l6.714-.959a.75.75 0 0 0 .643-.743v-6.75Z" /></svg>,
+                update: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#10b981" className={className}><path fillRule="evenodd" d="M11.828 2.25c-.916 0-1.699.663-1.85 1.567l-.091.549v.003c-.073.439-.45.736-.896.736H9.01c-.434 0-.896-.289-1.038-.681l-.162-.438c-.251-.675-.92-1.106-1.674-1.106h-.004c-.714 0-1.37.408-1.64 1.056l-.213.514c-.204.493-.68.802-1.22.802h-.103c-.563 0-1.084-.282-1.396-.75l-.261-.39a1.989 1.989 0 0 0-1.66-.889h-.002c-.86 0-1.614.54-1.85 1.376l-.1.353c-.15.53-.664.887-1.22.887h-.148c-.628 0-1.21-.318-1.53-.84l-.19-.31A1.944 1.944 0 0 0 .438 4.29C-.07 4.29-.497 4.706-.5 5.21v.172c0 .546-.358 1.026-.88 1.18l-.48.14a1.996 1.996 0 0 0-1.42 1.83v.006c0 .879.57 1.636 1.417 1.849l.487.123c.515.13.882.59.882 1.12v.12c0 .544-.37.1-.885.127l-.483.15a1.996 1.996 0 0 0-1.42 1.829v.007c0 .878.568 1.634 1.415 1.848l.492.124c.512.13.876.59.876 1.118v.117c0 .546-.36.1-.88.131l-.478.142A1.996 1.996 0 0 0-.5 18.618v.17c0 .506.428.92 .936.92h.001c.783 0 1.465-.472 1.76-.192l.186.306c.324.526.906.845 1.535.845h.142c.556 0 1.07-.356 1.22-.888l.1-.35c.238-.838.99-1.379 1.85-1.379h.002c.69 0 1.312.35 1.66.89l.261.39c.312.468.834.75 1.397.75h.102c.54 0 1.016-.31 1.22-.803l.213-.513c.27-.648.925-1.056 1.64-1.056h.004c.753 0 1.423.431 1.674 1.106l.161.438c.143.391.605.68 1.039.68h-.02c.445 0 .822-.297.896-.736l.09-.55v-.002c.15-.904.934-1.566 1.85-1.566h.002c.88 0 1.64.57 1.85 1.42l.14.48c.15.52.63.88 1.18.88v.17c0 .506.427.92.935.92h.002c.78 0 1.46-.47 1.76-.19l.18.31c.32.53.91.85 1.54.85h.14c.56 0 1.07-.36 1.22-.89l.1-.35c.24-.84.99-1.38 1.85-1.38h.002c.69 0 1.31.35 1.66.89l.26.39c.31.47.83.75 1.4.75h.1c.54 0 1.02-.31 1.22-.8l.21-.51c.27-.65.92-1.06 1.64-1.06h.004c.75 0 1.42.43 1.67 1.11l.16.44c.14.39.61.68 1.04.68h-.02c.44 0 .82-.3.9-.74l.09-.55v-.002c.15-.9.93-1.57 1.85-1.57Z" clipRule="evenodd" /><path fillRule="evenodd" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clipRule="evenodd" /></svg>,
+                admin: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ef4444" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm7.5-6a.75.75 0 0 0-1.5 0v5.25a.75.75 0 0 0 .22.53l3 3a.75.75 0 1 0 1.06-1.06l-2.78-2.78V6Z" clipRule="evenodd" /></svg>
+            };
+            return icons[name] || icons.file;
+        };
+
+        // --- GLOBAL APP LOGIC ---
+        const App = () => {
+            // STATE
+            const [isPowered, setIsPowered] = useState(false);
+            const [setupStep, setSetupStep] = useState(0);
+            const [isSetupComplete, setIsSetupComplete] = useState(false);
+            const [windows, setWindows] = useState([]);
+            const [activeWindow, setActiveWindow] = useState(null);
+            const [vfs, setVfs] = useState(DEFAULT_VFS);
+            const [systemHealth, setSystemHealth] = useState(100);
+            const [bsod, setBsod] = useState(null);
+            const [startMenuOpen, setStartMenuOpen] = useState(false);
+            const [isAdminMode, setIsAdminMode] = useState(false);
+            const [p2pLogs, setP2pLogs] = useState([]);
+
+            // INITIALIZATION FROM LOCALSTORAGE
+            useEffect(() => {
+                const checkHash = () => {
+                    if (window.location.hash === '#7319112') {
+                        setIsAdminMode(true);
+                    }
+                };
+                window.addEventListener('hashchange', checkHash);
+                checkHash();
+
+                const savedSetup = localStorage.getItem('marcinox_setup');
+                const savedVfs = localStorage.getItem('marcinox_vfs');
+                const savedHealth = localStorage.getItem('marcinox_health');
+
+                if (savedSetup === 'true') {
+                    setIsSetupComplete(true);
+                    setSetupStep(20);
+                }
+                if (savedVfs) {
+                    try { setVfs(JSON.parse(savedVfs)); } catch (e) {}
+                }
+                if (savedHealth) {
+                    setSystemHealth(parseInt(savedHealth));
+                }
+
+                setIsPowered(true); // Auto power on for preview
+
+                return () => window.removeEventListener('hashchange', checkHash);
+            }, []);
+
+            // PERSISTENCE EFFECT
+            useEffect(() => {
+                localStorage.setItem('marcinox_vfs', JSON.stringify(vfs));
+                localStorage.setItem('marcinox_setup', isSetupComplete.toString());
+                localStorage.setItem('marcinox_health', systemHealth.toString());
+            }, [vfs, isSetupComplete, systemHealth]);
+
+            // SYSTEM HEALTH & PAIN SIMULATION
+            useEffect(() => {
+                if (!isPowered || !isSetupComplete || bsod || isAdminMode) return;
+
+                const painInterval = setInterval(() => {
+                    setSystemHealth(h => {
+                        const newHealth = Math.max(0, h - (Math.random() > 0.7 ? 1 : 0)); // Slow decay
+                        if (newHealth <= 0) {
+                            setBsod("CRITICAL_PROCESS_DIED\n\nSystem odczuł krytyczny ból. Proces BITS przestał odpowiadać.\nSpróbuj załatać system przez panel P2P.");
+                        }
+                        return newHealth;
+                    });
+                }, 15000);
+
+                return () => clearInterval(painInterval);
+            }, [isPowered, isSetupComplete, bsod, isAdminMode]);
+
+            // HEALTH CSS CLASSES
+            const getGlitchClass = () => {
+                if (bsod) return '';
+                if (systemHealth < 15) return 'glitch-3';
+                if (systemHealth < 40) return 'glitch-2';
+                if (systemHealth < 70) return 'glitch-1';
+                return '';
+            };
+
+            // WINDOW MANAGEMENT
+            const openApp = (appType, title, props = {}) => {
+                const id = Date.now();
+                setWindows(w => [...w, {
+                    id, appType, title, 
+                    x: Math.random() * 100 + 50, y: Math.random() * 50 + 50, 
+                    width: props.width || 600, height: props.height || 400,
+                    minimized: false, maximized: false, zIndex: Date.now(),
+                    ...props
+                }]);
+                setActiveWindow(id);
+                setStartMenuOpen(false);
+            };
+
+            const closeWindow = (id) => setWindows(w => w.filter(win => win.id !== id));
+            const toggleMinimize = (id) => setWindows(w => w.map(win => win.id === id ? { ...win, minimized: !win.minimized } : win));
+            const toggleMaximize = (id) => setWindows(w => w.map(win => win.id === id ? { ...win, maximized: !win.maximized } : win));
+            
+            const bringToFront = (id) => {
+                setWindows(w => w.map(win => win.id === id ? { ...win, zIndex: Date.now(), minimized: false } : win));
+                setActiveWindow(id);
+            };
+
+            // VFS OPERATIONS
+            const saveFile = (path, content) => {
+                const parts = path.split('/');
+                const fileName = parts.pop();
+                const dirPath = parts.join('/');
+                
+                setVfs(prev => {
+                    const newVfs = { ...prev };
+                    
+                    const parentDir = newVfs[dirPath] ? { ...newVfs[dirPath] } : { type: 'dir', children: [] };
+                    parentDir.children = parentDir.children ? [...parentDir.children] : [];
+                    
+                    if (parentDir.type === 'dir' && !parentDir.children.includes(fileName)) {
+                        parentDir.children.push(fileName);
+                    }
+                    
+                    newVfs[dirPath] = parentDir;
+                    newVfs[path] = { type: 'file', content };
+                    
+                    return newVfs;
+                });
+            };
+
+            const createFolder = (parentPath, folderName) => {
+                const newPath = `${parentPath}/${folderName}`;
+                setVfs(prev => {
+                    const newVfs = { ...prev };
+                    
+                    const parentDir = newVfs[parentPath] ? { ...newVfs[parentPath] } : { type: 'dir', children: [] };
+                    parentDir.children = parentDir.children ? [...parentDir.children] : [];
+
+                    if (parentDir.type === 'dir' && !parentDir.children.includes(folderName)) {
+                        parentDir.children.push(folderName);
+                    }
+                    
+                    newVfs[parentPath] = parentDir;
+                    newVfs[newPath] = { type: 'dir', children: [] };
+                    
+                    return newVfs;
+                });
+            }
+
+            // ACTIONS
+            const handlePowerOff = () => { setIsPowered(false); setWindows([]); setBsod(null); };
+            const handleRestart = () => { setIsPowered(false); setTimeout(() => { setIsPowered(true); setBsod(null); setSystemHealth(Math.max(systemHealth, 10)); }, 2000); };
+
+            // COMPONENTS RENDERERS
+            if (!isPowered) return <div className="h-screen w-screen bg-black flex items-center justify-center text-white"><button onClick={() => setIsPowered(true)} className="px-6 py-2 bg-gray-800 rounded hover:bg-gray-700">Włącz Zasilanie</button></div>;
+
+            if (isAdminMode) {
+                return <MarcinoXAdmin 
+                            logs={p2pLogs} 
+                            setLogs={setP2pLogs}
+                            healSystem={() => { setSystemHealth(100); setBsod(null); }}
+                            vfs={vfs}
+                            saveFile={saveFile}
+                            exit={() => { window.location.hash = ''; setIsAdminMode(false); }}
+                        />;
+            }
+
+            if (bsod) {
+                return <div className="h-screen w-screen bg-[#0078d7] text-white p-16 font-sans flex flex-col justify-center">
+                    <h1 className="text-9xl mb-8">:(</h1>
+                    <h2 className="text-3xl mb-4">Twój komputer napotkał problem i musi zostać uruchomiony ponownie.</h2>
+                    <p className="text-xl mb-8">Trwa zbieranie informacji o błędzie. (100% ukończono)</p>
+                    <div className="flex gap-4 items-center">
+                        <div className="w-32 h-32 bg-white rounded flex items-center justify-center text-black font-bold">QR_CODE</div>
+                        <div>
+                            <p>Aby dowiedzieć się więcej, wyszukaj w trybie P2P ten błąd:</p>
+                            <p className="font-bold">{bsod.split('\n')[0]}</p>
+                            <p className="text-sm mt-2 opacity-80">{bsod}</p>
+                        </div>
+                    </div>
+                    <button onClick={handleRestart} className="mt-12 w-48 border border-white px-4 py-2 hover:bg-white hover:text-[#0078d7] transition">Restart (F8)</button>
+                </div>;
+            }
+
+            if (!isSetupComplete) {
+                return <SetupWizard 
+                            step={setupStep} 
+                            setStep={setSetupStep} 
+                            complete={() => setIsSetupComplete(true)} 
+                        />;
+            }
+
+            return (
+                <div className={`h-screen w-screen bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop')] bg-cover bg-center overflow-hidden flex flex-col relative ${getGlitchClass()}`}>
+                    
+                    {/* DESKTOP */}
+                    <div className="flex-1 p-4 flex flex-col gap-4 items-start" onMouseDown={() => setStartMenuOpen(false)}>
+                        <DesktopIcon name="Kosz" icon="folder" onClick={() => openApp('explorer', 'Kosz', { path: 'C:/' })} />
+                        <DesktopIcon name="Eksplorator" icon="folder" onClick={() => openApp('explorer', 'Eksplorator Plików', { path: 'C:/Users/planexd_0/Pulpit' })} />
+                        <DesktopIcon name="Edge P2P" icon="edge" onClick={() => openApp('edge', 'Przeglądarka P2P')} />
+                        <DesktopIcon name="Notatnik" icon="notepad" onClick={() => openApp('notepad', 'Notatnik - Nowy Dokument')} />
+                        <DesktopIcon name="System Update" icon="update" onClick={() => openApp('update', 'System Update')} />
+                    </div>
+
+                    {/* WINDOWS */}
+                    {windows.map(win => (
+                        <Window 
+                            key={win.id} 
+                            win={win} 
+                            active={activeWindow === win.id}
+                            bringToFront={() => bringToFront(win.id)}
+                            close={() => closeWindow(win.id)}
+                            minimize={() => toggleMinimize(win.id)}
+                            maximize={() => toggleMaximize(win.id)}
+                        >
+                            {win.appType === 'notepad' && <NotepadApp win={win} vfs={vfs} saveFile={saveFile} setWindows={setWindows} />}
+                            {win.appType === 'explorer' && <ExplorerApp initPath={win.path || 'C:/'} vfs={vfs} openApp={openApp} createFolder={createFolder} />}
+                            {win.appType === 'edge' && <EdgeApp />}
+                            {win.appType === 'update' && <UpdateApp health={systemHealth} />}
+                        </Window>
+                    ))}
+
+                    {/* START MENU */}
+                    {startMenuOpen && (
+                        <div className="absolute bottom-12 left-2 w-80 bg-gray-900/95 backdrop-blur border border-gray-700 rounded-t-lg shadow-2xl flex flex-col z-[9999] text-white animate-fade-in-up">
+                            <div className="p-4 grid grid-cols-3 gap-4">
+                                <StartApp icon="notepad" name="Notatnik" onClick={() => openApp('notepad', 'Notatnik')} />
+                                <StartApp icon="folder" name="Pliki" onClick={() => openApp('explorer', 'Eksplorator', { path: 'C:/' })} />
+                                <StartApp icon="edge" name="Internet" onClick={() => openApp('edge', 'Przeglądarka')} />
+                                <StartApp icon="update" name="Update" onClick={() => openApp('update', 'System Update')} />
+                            </div>
+                            <div className="bg-gray-800 p-4 border-t border-gray-700 flex justify-between items-center mt-auto rounded-b-lg">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold">P</div>
+                                    <span>planexd_0</span>
+                                </div>
+                                <div className="flex gap-2 text-gray-400">
+                                    <button onClick={handleRestart} className="hover:text-white p-2" title="Uruchom ponownie"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button>
+                                    <button onClick={handlePowerOff} className="hover:text-red-400 p-2" title="Wyłącz"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg></button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TASKBAR */}
+                    <div className="h-12 bg-gray-900/90 backdrop-blur-md border-t border-gray-800 flex items-center px-2 z-[10000] text-white">
+                        <button onClick={() => setStartMenuOpen(!startMenuOpen)} className="p-2 hover:bg-gray-700 rounded mr-2 transition">
+                            <Icon name="windows" className="w-6 h-6 text-blue-400" />
+                        </button>
+                        
+                        <div className="flex-1 flex gap-1 overflow-x-auto">
+                            {windows.map(win => (
+                                <button key={win.id} onClick={() => bringToFront(win.id)} 
+                                        className={`px-3 py-1.5 max-w-[150px] truncate rounded text-sm flex items-center gap-2 border-b-2 
+                                        ${activeWindow === win.id && !win.minimized ? 'bg-gray-700 border-blue-500' : 'hover:bg-gray-800 border-transparent'}`}>
+                                    <Icon name={win.appType} className="w-4 h-4 shrink-0" />
+                                    {win.title}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex items-center text-xs space-x-4 pr-2">
+                            <div className="flex flex-col items-end" title="Zdrowie Systemu">
+                                <span className={systemHealth < 30 ? 'text-red-400 font-bold' : 'text-green-400'}>HP: {systemHealth}%</span>
+                                <span>{new Date().toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'})}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- SETUP WIZARD ---
+        const SetupWizard = ({ step, setStep, complete }) => {
+            const progress = (step / SETUP_STEPS.length) * 100;
+            
+            useEffect(() => {
+                let timer;
+                if (step < SETUP_STEPS.length) {
+                    timer = setTimeout(() => {
+                        setStep(s => s + 1);
+                    }, Math.random() * 800 + 400); // Auto-advance fake setup
+                } else {
+                    complete();
+                }
+                return () => clearTimeout(timer);
+            }, [step]);
+
+            return (
+                <div className="h-screen w-screen bg-blue-900 text-white flex flex-col items-center justify-center font-sans">
+                    <Icon name="windows" className="w-24 h-24 text-white mb-8 animate-pulse" />
+                    <h1 className="text-3xl font-light mb-2">Instalacja MarcinoX OS</h1>
+                    <p className="text-xl opacity-80 mb-12">{SETUP_STEPS[step] || "Kończenie..."}</p>
+                    <div className="w-96 h-2 bg-blue-950 rounded overflow-hidden">
+                        <div className="h-full bg-white transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
+                    </div>
+                    <p className="mt-4 text-sm opacity-50">Krok {step + 1} z {SETUP_STEPS.length}</p>
+                    <p className="mt-12 opacity-40 text-xs">Pamięć P2P włączona. Proszę nie wyłączać komputera.</p>
+                </div>
+            );
+        };
+
+        // --- WINDOW COMPONENT (Draggable) ---
+        const Window = ({ win, active, bringToFront, close, minimize, maximize, children }) => {
+            const [pos, setPos] = useState({ x: win.x, y: win.y });
+            const [isDragging, setIsDragging] = useState(false);
+            const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+            const handleMouseDown = (e) => {
+                bringToFront();
+                if (win.maximized) return;
+                setIsDragging(true);
+                setDragOffset({ x: e.clientX - pos.x, y: e.clientY - pos.y });
+            };
+
+            const handleMouseMove = (e) => {
+                if (isDragging && !win.maximized) {
+                    setPos({ x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y });
+                }
+            };
+
+            const handleMouseUp = () => setIsDragging(false);
+
+            useEffect(() => {
+                if (isDragging) {
+                    window.addEventListener('mousemove', handleMouseMove);
+                    window.addEventListener('mouseup', handleMouseUp);
+                } else {
+                    window.removeEventListener('mousemove', handleMouseMove);
+                    window.removeEventListener('mouseup', handleMouseUp);
+                }
+                return () => {
+                    window.removeEventListener('mousemove', handleMouseMove);
+                    window.removeEventListener('mouseup', handleMouseUp);
+                };
+            }, [isDragging, dragOffset]);
+
+            if (win.minimized) return null;
+
+            const windowStyle = win.maximized ? 
+                { top: 0, left: 0, width: '100%', height: 'calc(100% - 48px)', zIndex: win.zIndex } :
+                { top: pos.y, left: pos.x, width: win.width, height: win.height, zIndex: win.zIndex };
+
+            return (
+                <div className="absolute flex flex-col bg-white border border-gray-400 window rounded-lg overflow-hidden" 
+                     style={windowStyle} onClick={bringToFront}>
+                    {/* Header */}
+                    <div className={`h-8 flex justify-between items-center select-none ${active ? 'bg-blue-100' : 'bg-gray-100'} border-b border-gray-300`}
+                         onMouseDown={handleMouseDown} onDoubleClick={maximize}>
+                        <div className="flex items-center px-2 gap-2 overflow-hidden">
+                            <Icon name={win.appType} className="w-4 h-4 text-gray-700" />
+                            <span className="text-sm truncate text-gray-800">{win.title}</span>
+                        </div>
+                        <div className="flex h-full">
+                            <button onClick={(e)=>{e.stopPropagation(); minimize();}} className="px-3 hover:bg-gray-200 text-gray-600 transition">-</button>
+                            <button onClick={(e)=>{e.stopPropagation(); maximize();}} className="px-3 hover:bg-gray-200 text-gray-600 transition">□</button>
+                            <button onClick={(e)=>{e.stopPropagation(); close();}} className="px-3 hover:bg-red-500 hover:text-white text-gray-600 transition">✕</button>
+                        </div>
+                    </div>
+                    {/* Body */}
+                    <div className="flex-1 bg-white relative overflow-hidden flex flex-col">
+                        {children}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- DESKTOP ICON ---
+        const DesktopIcon = ({ name, icon, onClick }) => (
+            <div className="w-20 p-2 flex flex-col items-center justify-center hover:bg-white/10 rounded cursor-pointer border border-transparent hover:border-white/20 transition group" onClick={onClick}>
+                <Icon name={icon} className="w-10 h-10 mb-1 drop-shadow-md group-hover:scale-105 transition" />
+                <span className="text-xs text-white text-center text-shadow break-words w-full" style={{textShadow: '1px 1px 2px black'}}>{name}</span>
+            </div>
+        );
+
+        const StartApp = ({ name, icon, onClick }) => (
+            <div className="flex flex-col items-center p-2 hover:bg-gray-800 rounded cursor-pointer transition" onClick={onClick}>
+                <Icon name={icon} className="w-8 h-8 mb-2" />
+                <span className="text-xs text-center">{name}</span>
+            </div>
+        );
+
+        // --- APPS ---
+
+        // NOTEPAD
+        const NotepadApp = ({ win, vfs, saveFile, setWindows }) => {
+            const [text, setText] = useState("");
+            const [saveDialog, setSaveDialog] = useState(false);
+            const [savePath, setSavePath] = useState("C:/Users/planexd_0/Pulpit/Nowy.txt");
+
+            useEffect(() => {
+                if (win.filePath && vfs[win.filePath]) {
+                    setText(vfs[win.filePath].content);
+                }
+            }, []);
+
+            const handleSave = () => {
+                if (win.filePath) {
+                    saveFile(win.filePath, text);
+                } else {
+                    setSaveDialog(true);
+                }
+            };
+
+            const confirmSave = () => {
+                saveFile(savePath, text);
+                setSaveDialog(false);
+                setWindows(w => w.map(x => x.id === win.id ? {...x, filePath: savePath, title: `Notatnik - ${savePath.split('/').pop()}`} : x));
+            };
+
+            return (
+                <div className="h-full flex flex-col">
+                    <div className="bg-gray-50 border-b border-gray-200 flex text-sm py-1 px-2 gap-4">
+                        <button className="hover:bg-gray-200 px-2 rounded" onClick={handleSave}>Zapisz</button>
+                        <button className="hover:bg-gray-200 px-2 rounded" onClick={() => setSaveDialog(true)}>Zapisz Jako...</button>
+                    </div>
+                    <textarea className="flex-1 w-full p-2 resize-none outline-none font-mono text-sm" 
+                              value={text} onChange={e => setText(e.target.value)} spellCheck="false" />
+                    
+                    {saveDialog && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-4">
+                            <div className="bg-white p-4 rounded shadow-lg w-full max-w-sm">
+                                <h3 className="font-bold mb-2">Zapisz plik jako</h3>
+                                <input className="w-full border p-2 mb-4 text-sm" value={savePath} onChange={e => setSavePath(e.target.value)} />
+                                <div className="flex justify-end gap-2">
+                                    <button className="px-4 py-1 bg-gray-200 rounded" onClick={() => setSaveDialog(false)}>Anuluj</button>
+                                    <button className="px-4 py-1 bg-blue-500 text-white rounded" onClick={confirmSave}>Zapisz (Symulacja)</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // EXPLORER
+        const ExplorerApp = ({ initPath, vfs, openApp, createFolder }) => {
+            const [path, setPath] = useState(initPath);
+            const [newFolderInput, setNewFolderInput] = useState(false);
+            const [newFolderName, setNewFolderName] = useState("Nowy folder");
+
+            const currentDir = vfs[path];
+            const children = (currentDir && currentDir.type === 'dir' && Array.isArray(currentDir.children)) ? currentDir.children : [];
+
+            const handleOpen = (itemName) => {
+                const newPath = path.endsWith('/') ? `${path}${itemName}` : `${path}/${itemName}`;
+                const item = vfs[newPath];
+                
+                if (item?.type === 'dir') {
+                    setPath(newPath);
+                } else if (item?.type === 'file') {
+                    openApp('notepad', `Notatnik - ${itemName}`, { filePath: newPath });
+                }
+            };
+
+            const goUp = () => {
+                if (path === 'C:' || path === 'C:/') return;
+                const parts = path.split('/');
+                parts.pop();
+                setPath(parts.join('/') || 'C:');
+            };
+
+            const handleCreateFolder = () => {
+                if (newFolderName.trim()) {
+                    createFolder(path, newFolderName.trim());
+                }
+                setNewFolderInput(false);
+                setNewFolderName("Nowy folder");
+            };
+
+            return (
+                <div className="h-full flex flex-col bg-white">
+                    <div className="bg-gray-100 border-b p-2 flex gap-2 items-center">
+                        <button onClick={goUp} className="p-1 hover:bg-gray-200 rounded text-xl" disabled={path === 'C:'}>↑</button>
+                        <input value={path} readOnly className="flex-1 border p-1 text-sm bg-white" />
+                        <button onClick={() => setNewFolderInput(true)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm rounded border border-blue-300">+ Folder</button>
+                    </div>
+                    <div className="flex-1 overflow-auto p-4 flex flex-wrap gap-4 items-start">
+                        {newFolderInput && (
+                            <div className="w-24 flex flex-col items-center text-center group">
+                                <Icon name="folder" className="w-12 h-12 text-yellow-400 mb-1" />
+                                <input autoFocus className="w-full text-xs border p-0.5 text-center" 
+                                    value={newFolderName} onChange={e=>setNewFolderName(e.target.value)}
+                                    onBlur={handleCreateFolder} onKeyDown={e => e.key === 'Enter' && handleCreateFolder()} />
+                            </div>
+                        )}
+                        {children.map(child => {
+                            const fullPath = `${path}/${child}`.replace('C://', 'C:/');
+                            const isDir = vfs[fullPath]?.type === 'dir';
+                            return (
+                                <div key={child} className="w-24 p-2 flex flex-col items-center text-center group hover:bg-blue-50 cursor-pointer rounded border border-transparent hover:border-blue-100"
+                                     onDoubleClick={() => handleOpen(child)}>
+                                    <Icon name={isDir ? "folder" : "file"} className={`w-12 h-12 mb-1 ${isDir ? 'text-yellow-400' : 'text-gray-400'}`} />
+                                    <span className="text-xs break-words w-full">{child}</span>
+                                </div>
+                            );
+                        })}
+                        {children.length === 0 && !newFolderInput && <p className="text-gray-400 text-sm w-full text-center mt-10">Ten folder jest pusty.</p>}
+                    </div>
+                </div>
+            );
+        };
+
+        // EDGE BROWSER
+        const EdgeApp = () => {
+            const [url, setUrl] = useState("https://www.wikipedia.org");
+            const [iframeUrl, setIframeUrl] = useState("https://www.wikipedia.org");
+
+            const navigate = (e) => {
+                e.preventDefault();
+                let targetUrl = url;
+                if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
+                setIframeUrl(targetUrl);
+            };
+
+            return (
+                <div className="h-full flex flex-col">
+                    <form onSubmit={navigate} className="bg-gray-100 border-b flex p-2 gap-2">
+                        <input type="text" className="flex-1 border rounded px-2 py-1 text-sm outline-none focus:border-blue-500" 
+                               value={url} onChange={e => setUrl(e.target.value)} />
+                        <button type="submit" className="bg-blue-500 text-white px-4 rounded text-sm hover:bg-blue-600">Idź</button>
+                    </form>
+                    <div className="flex-1 bg-white relative">
+                        <iframe src={iframeUrl} className="w-full h-full border-none" 
+                                sandbox="allow-scripts allow-same-origin" title="browser"></iframe>
+                        <div className="absolute bottom-2 right-2 bg-yellow-100 text-yellow-800 text-xs p-2 rounded shadow opacity-80 pointer-events-none">
+                            Tylko strony zezwalające na iframe zadziałają (np. wikipedia.org).
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // SYSTEM UPDATE (User View)
+        const UpdateApp = ({ health }) => {
+            return (
+                <div className="h-full p-6 bg-gray-50 flex flex-col">
+                    <h2 className="text-2xl font-light mb-6 flex items-center gap-2"><Icon name="update" className="text-blue-500" /> Windows Update (P2P)</h2>
+                    
+                    <div className="bg-white p-6 rounded shadow border border-gray-200">
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${health > 50 ? 'bg-green-500' : 'bg-red-500'}`}>
+                                {health > 50 ? '✓' : '!'}
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-lg">{health > 50 ? 'Twój system jest w dobrym stanie' : 'Wykryto niestabilność! (Ból systemu)'}</h3>
+                                <p className="text-sm text-gray-500">Zdrowie P2P: {health}%</p>
+                            </div>
+                        </div>
+                        
+                        <p className="text-sm text-gray-700 mb-4">
+                            Aktualizacja KB5095093 nie rozwiązuje lagów w grafice 3D. <br/>
+                            Aby uzyskać pełny dostęp do narzędzi administracyjnych MarcinoXupdate, użyj tajnego linku instalatora.
+                        </p>
+                        
+                        <button className="bg-gray-200 text-gray-500 px-4 py-2 rounded cursor-not-allowed">Sprawdź aktualizacje (Zablokowane)</button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MARCINOX ADMIN PANEL (#7319112) ---
+        const MarcinoXAdmin = ({ logs, setLogs, healSystem, vfs, saveFile, exit }) => {
+            const [code, setCode] = useState(`// MarcinoXupdate Patch Tool
+// Możesz tu pisać kod JS naprawiający system
+
+// 1. Zresetuj zdrowie systemu do 100%
+healSystem();
+
+// 2. Napraw plik bits.dll
+saveFile("C:/Windows/System32/bits.dll", "BITS_PATCHED_OK");
+
+log("Zastosowano aktualizację P2P. System uzdrowiony.");
+`);
+
+            const executePatch = () => {
+                const log = (msg) => setLogs(l => [...l, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+                try {
+                    // Safe evaluation context simulation
+                    const func = new Function('healSystem', 'saveFile', 'log', 'vfs', code);
+                    func(healSystem, saveFile, log, vfs);
+                    log("Wysłano paczkę przez P2P do wszystkich węzłów (Pomyślnie).");
+                } catch (e) {
+                    log(`BŁĄD PATCHA: ${e.message}`);
+                }
+            };
+
+            return (
+                <div className="h-screen w-screen bg-[#1e1e1e] text-[#d4d4d4] font-mono flex flex-col p-4 relative z-[999999]">
+                    <div className="flex justify-between items-center mb-4 border-b border-[#333] pb-2">
+                        <h1 className="text-xl text-[#569cd6] font-bold flex items-center gap-2">
+                            <Icon name="admin" /> MarcinoXupdate P2P Admin Root
+                        </h1>
+                        <button onClick={exit} className="bg-red-600 text-white px-4 py-1 hover:bg-red-700 transition">ZAMKNIJ I WRÓĆ DO SYSTEMU</button>
+                    </div>
+
+                    <div className="flex-1 flex gap-4 min-h-0">
+                        {/* Editor */}
+                        <div className="flex-1 flex flex-col bg-[#252526] border border-[#333] rounded">
+                            <div className="bg-[#2d2d2d] px-4 py-1 text-xs border-b border-[#333]">patch.js</div>
+                            <textarea 
+                                className="flex-1 w-full bg-transparent p-4 outline-none resize-none font-mono text-sm text-[#ce9178]"
+                                spellCheck="false"
+                                value={code}
+                                onChange={e => setCode(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Controls & Console */}
+                        <div className="w-1/3 flex flex-col gap-4">
+                            <div className="bg-[#252526] p-4 border border-[#333] rounded">
+                                <h2 className="text-[#4ec9b0] mb-2 text-sm uppercase">Opublikuj aktualizację</h2>
+                                <p className="text-xs text-gray-400 mb-4">Kod zostanie skompilowany i zapisany do lokalnego jądra systemu, a następnie przesłany siecią P2P (Symulacja).</p>
+                                <button onClick={executePatch} className="w-full bg-[#0e639c] hover:bg-[#1177bb] text-white py-2 font-bold transition">Wykonaj & Opublikuj</button>
+                            </div>
+                            
+                            <div className="flex-1 bg-black border border-[#333] p-2 flex flex-col rounded min-h-0 overflow-hidden">
+                                <span className="text-xs text-gray-500 border-b border-[#333] pb-1 mb-1 block">Terminal O/I P2P</span>
+                                <div className="flex-1 overflow-auto text-xs whitespace-pre-wrap">
+                                    {logs.map((l, i) => <div key={i} className={l.includes('BŁĄD') ? 'text-red-400' : 'text-green-400'}>{l}</div>)}
+                                    {logs.length === 0 && <div className="text-gray-600">Oczekiwanie na dyspozycje...</div>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Render App
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
