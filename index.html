@@ -34,6 +34,11 @@
             10% { transform: skewX(0deg); }
             100% { transform: skewX(0deg); }
         }
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .ai-thinking { animation: pulse-fast 1s infinite; }
 
         /* Niestandardowy Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -46,7 +51,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
         // --- CONSTANTS & DEFAULT VFS ---
         const SETUP_STEPS = [
@@ -69,13 +74,13 @@
             "C:/Users": { type: "dir", children: ["planexd_0"] },
             "C:/Users/planexd_0": { type: "dir", children: ["Pulpit", "Dokumenty"] },
             "C:/Users/planexd_0/Pulpit": { type: "dir", children: ["Witaj.txt"] },
-            "C:/Users/planexd_0/Pulpit/Witaj.txt": { type: "file", content: "Witaj w nowym systemie MarcinoX OS!\n\nTo jest w pełni funkcjonalny system zapisujący dane w przeglądarce.\nUżyj dopisku #7319112 w URL aby wejść w tryb Admina i wypuścić łatkę na ból systemu!" },
+            "C:/Users/planexd_0/Pulpit/Witaj.txt": { type: "file", content: "Witaj w nowym systemie MarcinoX OS!\n\nTo jest w pełni funkcjonalny system zapisujący dane w przeglądarce.\nUżyj dopisku #7319112 w URL aby wejść w tryb Admina i wypuścić łatkę na ból systemu!\n\nNaciśnij CTRL+X, aby otworzyć menu awaryjne." },
             "C:/Users/planexd_0/Dokumenty": { type: "dir", children: [] },
             "C:/P2P_Updates": { type: "dir", children: [] }
         };
 
         // --- ICONS (SVG) ---
-        const Icon = ({ name, className = "w-6 h-6", fill = "currentColor" }) => {
+        const Icon = React.memo(({ name, className = "w-6 h-6", fill = "currentColor" }) => {
             const icons = {
                 folder: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#fbbf24" className={className}><path d="M19.5 21a3 3 0 0 0 3-3v-4.5a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3V18a3 3 0 0 0 3 3h15ZM1.5 10.146V6a3 3 0 0 1 3-3h5.379a2.25 2.25 0 0 1 1.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 0 1 3 3v1.146A4.483 4.483 0 0 0 19.5 9h-15a4.483 4.483 0 0 0-3 1.146Z" /></svg>,
                 file: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#f8fafc" className={className}><path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0 0 16.5 9h-1.875a1.875 1.875 0 0 1-1.875-1.875V5.25A3.75 3.75 0 0 0 9 1.5H5.625ZM7.5 15a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5A.75.75 0 0 1 7.5 15Zm.75 2.25a.75.75 0 0 0 0 1.5H12a.75.75 0 0 0 0-1.5H8.25Z" /><path d="M12.971 1.816A5.23 5.23 0 0 1 14.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 0 1 3.434 1.279 9.768 9.768 0 0 0-6.963-6.963Z" /></svg>,
@@ -83,10 +88,11 @@
                 edge: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm14.024-.983a2.25 2.25 0 0 1-1.482 2.19l-4.5 1.5a2.25 2.25 0 0 1-2.92-2.186V10.5a2.25 2.25 0 0 1 1.482-2.19l4.5-1.5a2.25 2.25 0 0 1 2.92 2.186v2.021Z" clipRule="evenodd" /></svg>,
                 windows: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#0ea5e9" className={className}><path d="M22.5 11.25V3a.75.75 0 0 0-.856-.743l-9 1.286A.75.75 0 0 0 12 4.286v6.964h10.5ZM10.5 11.25V4.5a.75.75 0 0 0-.643-.743L3.143 2.786A.75.75 0 0 0 2.25 3.536v7.714H10.5ZM22.5 12.75H12v6.964a.75.75 0 0 0 .644.743l9 1.286a.75.75 0 0 0 .856-.743v-8.25ZM10.5 12.75H2.25v7.714a.75.75 0 0 0 .893.743l6.714-.959a.75.75 0 0 0 .643-.743v-6.75Z" /></svg>,
                 update: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#10b981" className={className}><path fillRule="evenodd" d="M11.828 2.25c-.916 0-1.699.663-1.85 1.567l-.091.549v.003c-.073.439-.45.736-.896.736H9.01c-.434 0-.896-.289-1.038-.681l-.162-.438c-.251-.675-.92-1.106-1.674-1.106h-.004c-.714 0-1.37.408-1.64 1.056l-.213.514c-.204.493-.68.802-1.22.802h-.103c-.563 0-1.084-.282-1.396-.75l-.261-.39a1.989 1.989 0 0 0-1.66-.889h-.002c-.86 0-1.614.54-1.85 1.376l-.1.353c-.15.53-.664.887-1.22.887h-.148c-.628 0-1.21-.318-1.53-.84l-.19-.31A1.944 1.944 0 0 0 .438 4.29C-.07 4.29-.497 4.706-.5 5.21v.172c0 .546-.358 1.026-.88 1.18l-.48.14a1.996 1.996 0 0 0-1.42 1.83v.006c0 .879.57 1.636 1.417 1.849l.487.123c.515.13.882.59.882 1.12v.12c0 .544-.37.1-.885.127l-.483.15a1.996 1.996 0 0 0-1.42 1.829v.007c0 .878.568 1.634 1.415 1.848l.492.124c.512.13.876.59.876 1.118v.117c0 .546-.36.1-.88.131l-.478.142A1.996 1.996 0 0 0-.5 18.618v.17c0 .506.428.92 .936.92h.001c.783 0 1.465-.472 1.76-.192l.186.306c.324.526.906.845 1.535.845h.142c.556 0 1.07-.356 1.22-.888l.1-.35c.238-.838.99-1.379 1.85-1.379h.002c.69 0 1.312.35 1.66.89l.261.39c.312.468.834.75 1.397.75h.102c.54 0 1.016-.31 1.22-.803l.213-.513c.27-.648.925-1.056 1.64-1.056h.004c.753 0 1.423.431 1.674 1.106l.161.438c.143.391.605.68 1.039.68h-.02c.445 0 .822-.297.896-.736l.09-.55v-.002c.15-.904.934-1.566 1.85-1.566h.002c.88 0 1.64.57 1.85 1.42l.14.48c.15.52.63.88 1.18.88v.17c0 .506.427.92.935.92h.002c.78 0 1.46-.47 1.76-.19l.18.31c.32.53.91.85 1.54.85h.14c.56 0 1.07-.36 1.22-.89l.1-.35c.24-.84.99-1.38 1.85-1.38h.002c.69 0 1.31.35 1.66.89l.26.39c.31.47.83.75 1.4.75h.1c.54 0 1.02-.31 1.22-.8l.21-.51c.27-.65.92-1.06 1.64-1.06h.004c.75 0 1.42.43 1.67 1.11l.16.44c.14.39.61.68 1.04.68h-.02c.44 0 .82-.3.9-.74l.09-.55v-.002c.15-.9.93-1.57 1.85-1.57Z" clipRule="evenodd" /><path fillRule="evenodd" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clipRule="evenodd" /></svg>,
-                admin: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ef4444" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm7.5-6a.75.75 0 0 0-1.5 0v5.25a.75.75 0 0 0 .22.53l3 3a.75.75 0 1 0 1.06-1.06l-2.78-2.78V6Z" clipRule="evenodd" /></svg>
+                admin: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ef4444" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm7.5-6a.75.75 0 0 0-1.5 0v5.25a.75.75 0 0 0 .22.53l3 3a.75.75 0 1 0 1.06-1.06l-2.78-2.78V6Z" clipRule="evenodd" /></svg>,
+                ai: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#8b5cf6" className={className}><path fillRule="evenodd" d="M9 4.5a.75.75 0 0 1 .721.544l.813 2.846a3.75 3.75 0 0 0 2.576 2.576l2.846.813a.75.75 0 0 1 0 1.442l-2.846.813a3.75 3.75 0 0 0-2.576 2.576l-.813 2.846a.75.75 0 0 1-1.442 0l-.813-2.846a3.75 3.75 0 0 0-2.576-2.576l-2.846-.813a.75.75 0 0 1 0-1.442l2.846-.813A3.75 3.75 0 0 0 7.466 7.89l.813-2.846A.75.75 0 0 1 9 4.5ZM18 1.5a.75.75 0 0 1 .728.568l.258 1.036c.236.94.97 1.674 1.91 1.91l1.036.258a.75.75 0 0 1 0 1.456l-1.036.258c-.94.236-1.674.97-1.91 1.91l-.258 1.036a.75.75 0 0 1-1.456 0l-.258-1.036a2.625 2.625 0 0 0-1.91-1.91l-1.036-.258a.75.75 0 0 1 0-1.456l1.036-.258a2.625 2.625 0 0 0 1.91-1.91l.258-1.036A.75.75 0 0 1 18 1.5ZM16.5 15a.75.75 0 0 1 .712.513l.394 1.183c.15.447.5.799.948.948l1.183.395a.75.75 0 0 1 0 1.422l-1.183.395c-.447.15-.799.5-.948.948l-.395 1.183a.75.75 0 0 1-1.422 0l-.395-1.183a1.5 1.5 0 0 0-.948-.948l-1.183-.395a.75.75 0 0 1 0-1.422l1.183-.395c.447-.15.799-.5.948-.948l.395-1.183A.75.75 0 0 1 16.5 15Z" clipRule="evenodd" /></svg>
             };
             return icons[name] || icons.file;
-        };
+        });
 
         // --- GLOBAL APP LOGIC ---
         const App = () => {
@@ -102,6 +108,7 @@
             const [startMenuOpen, setStartMenuOpen] = useState(false);
             const [isAdminMode, setIsAdminMode] = useState(false);
             const [p2pLogs, setP2pLogs] = useState([]);
+            const [showEmergencyMenu, setShowEmergencyMenu] = useState(false);
 
             // INITIALIZATION FROM LOCALSTORAGE
             useEffect(() => {
@@ -131,6 +138,19 @@
                 setIsPowered(true); // Auto power on for preview
 
                 return () => window.removeEventListener('hashchange', checkHash);
+            }, []);
+
+            // CTRL+X EMERGENCY MENU SHORTCUT
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (e.ctrlKey && e.key.toLowerCase() === 'x') {
+                        e.preventDefault();
+                        setShowEmergencyMenu(prev => !prev);
+                        setStartMenuOpen(false);
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
             }, []);
 
             // PERSISTENCE EFFECT
@@ -166,8 +186,8 @@
                 return '';
             };
 
-            // WINDOW MANAGEMENT
-            const openApp = (appType, title, props = {}) => {
+            // WINDOW MANAGEMENT (Optimized with useCallback to prevent lags)
+            const openApp = useCallback((appType, title, props = {}) => {
                 const id = Date.now();
                 setWindows(w => [...w, {
                     id, appType, title, 
@@ -178,19 +198,19 @@
                 }]);
                 setActiveWindow(id);
                 setStartMenuOpen(false);
-            };
+            }, []);
 
-            const closeWindow = (id) => setWindows(w => w.filter(win => win.id !== id));
-            const toggleMinimize = (id) => setWindows(w => w.map(win => win.id === id ? { ...win, minimized: !win.minimized } : win));
-            const toggleMaximize = (id) => setWindows(w => w.map(win => win.id === id ? { ...win, maximized: !win.maximized } : win));
+            const closeWindow = useCallback((id) => setWindows(w => w.filter(win => win.id !== id)), []);
+            const toggleMinimize = useCallback((id) => setWindows(w => w.map(win => win.id === id ? { ...win, minimized: !win.minimized } : win)), []);
+            const toggleMaximize = useCallback((id) => setWindows(w => w.map(win => win.id === id ? { ...win, maximized: !win.maximized } : win)), []);
             
-            const bringToFront = (id) => {
+            const bringToFront = useCallback((id) => {
                 setWindows(w => w.map(win => win.id === id ? { ...win, zIndex: Date.now(), minimized: false } : win));
                 setActiveWindow(id);
-            };
+            }, []);
 
             // VFS OPERATIONS
-            const saveFile = (path, content) => {
+            const saveFile = useCallback((path, content) => {
                 const parts = path.split('/');
                 const fileName = parts.pop();
                 const dirPath = parts.join('/');
@@ -210,9 +230,9 @@
                     
                     return newVfs;
                 });
-            };
+            }, []);
 
-            const createFolder = (parentPath, folderName) => {
+            const createFolder = useCallback((parentPath, folderName) => {
                 const newPath = `${parentPath}/${folderName}`;
                 setVfs(prev => {
                     const newVfs = { ...prev };
@@ -229,11 +249,37 @@
                     
                     return newVfs;
                 });
-            }
+            }, []);
 
             // ACTIONS
-            const handlePowerOff = () => { setIsPowered(false); setWindows([]); setBsod(null); };
-            const handleRestart = () => { setIsPowered(false); setTimeout(() => { setIsPowered(true); setBsod(null); setSystemHealth(Math.max(systemHealth, 10)); }, 2000); };
+            const handlePowerOff = useCallback(() => { 
+                setIsPowered(false); 
+                setWindows([]); 
+                setBsod(null); 
+                setShowEmergencyMenu(false); 
+            }, []);
+            
+            const handleRestart = useCallback(() => { 
+                setIsPowered(false); 
+                setShowEmergencyMenu(false);
+                setTimeout(() => { 
+                    setIsPowered(true); 
+                    setBsod(null); 
+                    setSystemHealth(Math.max(systemHealth, 10)); 
+                }, 2000); 
+            }, [systemHealth]);
+
+            const handleLogout = useCallback(() => {
+                setWindows([]);
+                setShowEmergencyMenu(false);
+                setStartMenuOpen(false);
+            }, []);
+
+            const healSystem = useCallback(() => {
+                setSystemHealth(100);
+                setBsod(null);
+            }, []);
+
 
             // COMPONENTS RENDERERS
             if (!isPowered) return <div className="h-screen w-screen bg-black flex items-center justify-center text-white"><button onClick={() => setIsPowered(true)} className="px-6 py-2 bg-gray-800 rounded hover:bg-gray-700">Włącz Zasilanie</button></div>;
@@ -242,7 +288,7 @@
                 return <MarcinoXAdmin 
                             logs={p2pLogs} 
                             setLogs={setP2pLogs}
-                            healSystem={() => { setSystemHealth(100); setBsod(null); }}
+                            healSystem={healSystem}
                             vfs={vfs}
                             saveFile={saveFile}
                             exit={() => { window.location.hash = ''; setIsAdminMode(false); }}
@@ -277,6 +323,31 @@
             return (
                 <div className={`h-screen w-screen bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop')] bg-cover bg-center overflow-hidden flex flex-col relative ${getGlitchClass()}`}>
                     
+                    {/* EMERGENCY MENU OVERLAY (CTRL+X) */}
+                    {showEmergencyMenu && (
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-[999999] flex flex-col items-center justify-center text-white">
+                            <h1 className="text-4xl font-light mb-12 flex items-center gap-4">
+                                <Icon name="windows" className="w-12 h-12 text-blue-500" />
+                                Opcje Zabezpieczeń MarcinoX OS
+                            </h1>
+                            <div className="flex flex-col gap-4 w-72">
+                                <button onClick={handleLogout} className="bg-gray-800 hover:bg-gray-700 py-3 rounded text-lg border border-gray-600 transition shadow-lg text-left px-6">
+                                    <span className="font-bold">Wyloguj się</span> (Zwiń aplikacje)
+                                </button>
+                                <button onClick={handleRestart} className="bg-yellow-700 hover:bg-yellow-600 py-3 rounded text-lg border border-yellow-500 transition shadow-lg text-left px-6">
+                                    <span className="font-bold">Awaryjny Restart</span>
+                                </button>
+                                <button onClick={handlePowerOff} className="bg-red-700 hover:bg-red-600 py-3 rounded text-lg border border-red-500 transition shadow-lg text-left px-6">
+                                    <span className="font-bold">Zamknij system</span>
+                                </button>
+                                
+                                <button onClick={() => setShowEmergencyMenu(false)} className="mt-8 text-gray-400 hover:text-white transition">
+                                    Anuluj (Esc)
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* DESKTOP */}
                     <div className="flex-1 p-4 flex flex-col gap-4 items-start" onMouseDown={() => setStartMenuOpen(false)}>
                         <DesktopIcon name="Kosz" icon="folder" onClick={() => openApp('explorer', 'Kosz', { path: 'C:/' })} />
@@ -300,7 +371,7 @@
                             {win.appType === 'notepad' && <NotepadApp win={win} vfs={vfs} saveFile={saveFile} setWindows={setWindows} />}
                             {win.appType === 'explorer' && <ExplorerApp initPath={win.path || 'C:/'} vfs={vfs} openApp={openApp} createFolder={createFolder} />}
                             {win.appType === 'edge' && <EdgeApp />}
-                            {win.appType === 'update' && <UpdateApp health={systemHealth} />}
+                            {win.appType === 'update' && <UpdateApp health={systemHealth} healSystem={healSystem} />}
                         </Window>
                     ))}
 
@@ -384,8 +455,8 @@
             );
         };
 
-        // --- WINDOW COMPONENT (Draggable) ---
-        const Window = ({ win, active, bringToFront, close, minimize, maximize, children }) => {
+        // --- WINDOW COMPONENT (Draggable, Optimized) ---
+        const Window = React.memo(({ win, active, bringToFront, close, minimize, maximize, children }) => {
             const [pos, setPos] = useState({ x: win.x, y: win.y });
             const [isDragging, setIsDragging] = useState(false);
             const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -397,13 +468,13 @@
                 setDragOffset({ x: e.clientX - pos.x, y: e.clientY - pos.y });
             };
 
-            const handleMouseMove = (e) => {
+            const handleMouseMove = useCallback((e) => {
                 if (isDragging && !win.maximized) {
                     setPos({ x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y });
                 }
-            };
+            }, [isDragging, dragOffset, win.maximized]);
 
-            const handleMouseUp = () => setIsDragging(false);
+            const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
             useEffect(() => {
                 if (isDragging) {
@@ -417,7 +488,7 @@
                     window.removeEventListener('mousemove', handleMouseMove);
                     window.removeEventListener('mouseup', handleMouseUp);
                 };
-            }, [isDragging, dragOffset]);
+            }, [isDragging, handleMouseMove, handleMouseUp]);
 
             if (win.minimized) return null;
 
@@ -447,7 +518,7 @@
                     </div>
                 </div>
             );
-        };
+        });
 
         // --- DESKTOP ICON ---
         const DesktopIcon = ({ name, icon, onClick }) => (
@@ -615,35 +686,76 @@
             );
         };
 
-        // SYSTEM UPDATE (User View)
-        const UpdateApp = ({ health }) => {
+        // --- SYSTEM UPDATE (User View) ---
+        const UpdateApp = ({ health, healSystem }) => {
+            const [isUpdating, setIsUpdating] = useState(false);
+            const [progress, setProgress] = useState(0);
+
+            const hasUpdates = health < 100;
+
+            const startUpdate = () => {
+                setIsUpdating(true);
+                setProgress(0);
+                
+                const interval = setInterval(() => {
+                    setProgress(prev => {
+                        if (prev >= 100) {
+                            clearInterval(interval);
+                            healSystem(); // Uzdrowienie systemu
+                            setIsUpdating(false);
+                            return 100;
+                        }
+                        // Symulacja losowej prędkości pobierania pakietów
+                        return prev + Math.floor(Math.random() * 15) + 5; 
+                    });
+                }, 400);
+            };
+
             return (
                 <div className="h-full p-6 bg-gray-50 flex flex-col">
                     <h2 className="text-2xl font-light mb-6 flex items-center gap-2"><Icon name="update" className="text-blue-500" /> Windows Update (P2P)</h2>
                     
-                    <div className="bg-white p-6 rounded shadow border border-gray-200">
+                    <div className="bg-white p-6 rounded shadow border border-gray-200 relative overflow-hidden">
+                        
+                        {/* PASEK POSTĘPU */}
+                        {isUpdating && (
+                            <div className="absolute top-0 left-0 h-1 bg-blue-500 transition-all duration-300" style={{width: `${progress}%`}}></div>
+                        )}
+
                         <div className="flex items-center gap-4 mb-4">
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${health > 50 ? 'bg-green-500' : 'bg-red-500'}`}>
-                                {health > 50 ? '✓' : '!'}
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${!hasUpdates ? 'bg-green-500' : 'bg-red-500'}`}>
+                                {!hasUpdates ? '✓' : '!'}
                             </div>
                             <div>
-                                <h3 className="font-bold text-lg">{health > 50 ? 'Twój system jest w dobrym stanie' : 'Wykryto niestabilność! (Ból systemu)'}</h3>
+                                <h3 className="font-bold text-lg">
+                                    {!hasUpdates ? 'Brak dostępnych aktualizacji' : 'Wykryto niestabilność! (Dostępna łatka P2P)'}
+                                </h3>
                                 <p className="text-sm text-gray-500">Zdrowie P2P: {health}%</p>
                             </div>
                         </div>
                         
-                        <p className="text-sm text-gray-700 mb-4">
-                            Aktualizacja KB5095093 nie rozwiązuje lagów w grafice 3D. <br/>
-                            Aby uzyskać pełny dostęp do narzędzi administracyjnych MarcinoXupdate, użyj tajnego linku instalatora.
-                        </p>
+                        {!hasUpdates ? (
+                            <p className="text-sm text-gray-700 mb-4">Twój system działa z optymalną wydajnością. Wszelkie łatki bezpieczeństwa oraz sterowniki 3D są zainstalowane i aktualne.</p>
+                        ) : (
+                            <p className="text-sm text-gray-700 mb-4 text-red-600 font-medium">System odczuwa ból! Dostępna jest aktualizacja naprawiająca proces BITS i stabilizująca powłokę.</p>
+                        )}
                         
-                        <button className="bg-gray-200 text-gray-500 px-4 py-2 rounded cursor-not-allowed">Sprawdź aktualizacje (Zablokowane)</button>
+                        {isUpdating ? (
+                            <div className="text-sm text-blue-600 font-bold animate-pulse">Pobieranie i instalowanie... {Math.min(progress, 100)}%</div>
+                        ) : (
+                            <button 
+                                onClick={startUpdate} 
+                                disabled={!hasUpdates}
+                                className={`px-4 py-2 rounded transition font-bold ${!hasUpdates ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'}`}>
+                                {!hasUpdates ? 'Jesteś aktualny' : 'Pobierz wszystko i aktualizuj'}
+                            </button>
+                        )}
                     </div>
                 </div>
             );
         };
 
-        // --- MARCINOX ADMIN PANEL (#7319112) ---
+        // --- MARCINOX ADMIN PANEL (#7319112) Z INTEGRACJĄ GEMINI AI ---
         const MarcinoXAdmin = ({ logs, setLogs, healSystem, vfs, saveFile, exit }) => {
             const [code, setCode] = useState(`// MarcinoXupdate Patch Tool
 // Możesz tu pisać kod JS naprawiający system
@@ -656,6 +768,9 @@ saveFile("C:/Windows/System32/bits.dll", "BITS_PATCHED_OK");
 
 log("Zastosowano aktualizację P2P. System uzdrowiony.");
 `);
+            const [aiPrompt, setAiPrompt] = useState("");
+            const [isThinking, setIsThinking] = useState(false);
+            const [apiKey, setApiKey] = useState(localStorage.getItem('marcinox_api_key') || "");
 
             const executePatch = () => {
                 const log = (msg) => setLogs(l => [...l, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -669,40 +784,131 @@ log("Zastosowano aktualizację P2P. System uzdrowiony.");
                 }
             };
 
+            const askGemini = async () => {
+                if (!aiPrompt.trim()) return;
+                if (!apiKey.trim()) {
+                    setLogs(l => [...l, `[AI_AGENT] BŁĄD: Brak klucza API! Wklej go w prawym górnym rogu panelu AI.`]);
+                    return;
+                }
+                
+                setIsThinking(true);
+                const log = (msg) => setLogs(l => [...l, `[AI_AGENT] ${msg}`]);
+                log("Wysyłanie zapytania do klastra Gemini AI...");
+                
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                    
+                    const systemInstruction = "Jesteś asystentem MarcinoX OS Admin. Wygeneruj tylko i wyłącznie poprawny kod JavaScript. Nie używaj znaczników markdown takich jak \`\`\`javascript czy \`\`\`. Masz do dyspozycji funkcje: healSystem() (przywraca 100% zdrowia), saveFile(path, content) (zapisuje plik we wirtualnym systemie plików), log(message) (wypisuje tekst w konsoli panelu). Użytkownik przekaże ci w poleceniu co masz zrobić, wygeneruj sam kod.";
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: aiPrompt }] }],
+                            systemInstruction: { parts: [{ text: systemInstruction }] }
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if(data.error) {
+                        throw new Error(data.error.message);
+                    }
+
+                    let generatedCode = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                    
+                    // Oczyszczanie ewentualnych znaczników markdown z uzyciem symboli
+                    generatedCode = generatedCode.replace(/```javascript/gi, '').replace(/```js/gi, '').replace(/```/g, '').trim();
+                    
+                    setCode(generatedCode);
+                    log("Kod wygenerowany i wklejony do edytora. Przejrzyj go i Opublikuj.");
+                    setAiPrompt("");
+
+                } catch (err) {
+                    log(`BŁĄD SIECI NEURONOWEJ: ${err.message}. (Czy poprawnie wstrzyknięto klucz?)`);
+                }
+                
+                setIsThinking(false);
+            };
+
             return (
                 <div className="h-screen w-screen bg-[#1e1e1e] text-[#d4d4d4] font-mono flex flex-col p-4 relative z-[999999]">
                     <div className="flex justify-between items-center mb-4 border-b border-[#333] pb-2">
                         <h1 className="text-xl text-[#569cd6] font-bold flex items-center gap-2">
                             <Icon name="admin" /> MarcinoXupdate P2P Admin Root
                         </h1>
-                        <button onClick={exit} className="bg-red-600 text-white px-4 py-1 hover:bg-red-700 transition">ZAMKNIJ I WRÓĆ DO SYSTEMU</button>
+                        <button onClick={exit} className="bg-red-600 text-white px-4 py-1 hover:bg-red-700 transition font-bold">ZAMKNIJ I WRÓĆ DO SYSTEMU</button>
                     </div>
 
                     <div className="flex-1 flex gap-4 min-h-0">
-                        {/* Editor */}
-                        <div className="flex-1 flex flex-col bg-[#252526] border border-[#333] rounded">
-                            <div className="bg-[#2d2d2d] px-4 py-1 text-xs border-b border-[#333]">patch.js</div>
-                            <textarea 
-                                className="flex-1 w-full bg-transparent p-4 outline-none resize-none font-mono text-sm text-[#ce9178]"
-                                spellCheck="false"
-                                value={code}
-                                onChange={e => setCode(e.target.value)}
-                            />
+                        {/* Editor & AI Input */}
+                        <div className="flex-1 flex flex-col gap-4">
+                            
+                            {/* AI P2P Module */}
+                            <div className="bg-[#252526] border border-[#333] rounded p-4 flex flex-col gap-2 relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500"></div>
+                                <h2 className="text-[#c586c0] text-sm uppercase flex items-center justify-between font-bold mb-1">
+                                    <span className="flex items-center gap-2">
+                                        <Icon name="ai" className={isThinking ? "ai-thinking text-purple-400" : "text-purple-400"} /> 
+                                        Asystent AI P2P (Gemini)
+                                    </span>
+                                    <span className="text-[10px] text-gray-500 flex items-center gap-1 font-normal tracking-normal">
+                                        KLUCZ API: <input 
+                                            type="password" 
+                                            value={apiKey} 
+                                            onChange={e => {
+                                                setApiKey(e.target.value);
+                                                localStorage.setItem('marcinox_api_key', e.target.value);
+                                            }} 
+                                            placeholder="Wklej klucz Gemini..." 
+                                            className="bg-black border border-[#444] px-1 text-green-400 w-40 outline-none placeholder-gray-700" 
+                                            title="Wklej tutaj swój klucz API Gemini" 
+                                        />
+                                    </span>
+                                </h2>
+                                <p className="text-xs text-gray-400 mb-2">Napisz, co chcesz zrobić (np. "Napraw BITS i stwórz plik hej.txt"), a AI wygeneruje dla Ciebie łatkę w JavaScript.</p>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Co mam zakodować, planexd_0?..." 
+                                        className="flex-1 bg-[#1e1e1e] border border-[#444] text-white px-3 py-1 text-sm outline-none focus:border-purple-500 transition"
+                                        value={aiPrompt}
+                                        onChange={e => setAiPrompt(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && askGemini()}
+                                        disabled={isThinking}
+                                    />
+                                    <button 
+                                        onClick={askGemini} 
+                                        disabled={isThinking || !aiPrompt.trim()}
+                                        className={`px-4 py-1 font-bold transition ${isThinking ? 'bg-purple-900 text-gray-400' : 'bg-purple-700 hover:bg-purple-600 text-white'}`}
+                                    >
+                                        {isThinking ? 'Myślenie...' : 'Generuj Kod'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Code Editor */}
+                            <div className="flex-1 flex flex-col bg-[#252526] border border-[#333] rounded">
+                                <div className="bg-[#2d2d2d] px-4 py-1 text-xs border-b border-[#333] text-[#4ec9b0] font-bold">patch.js (Wersja P2P)</div>
+                                <textarea 
+                                    className="flex-1 w-full bg-[#1e1e1e] p-4 outline-none resize-none font-mono text-sm text-[#ce9178] leading-relaxed"
+                                    spellCheck="false"
+                                    value={code}
+                                    onChange={e => setCode(e.target.value)}
+                                />
+                            </div>
                         </div>
 
                         {/* Controls & Console */}
                         <div className="w-1/3 flex flex-col gap-4">
                             <div className="bg-[#252526] p-4 border border-[#333] rounded">
-                                <h2 className="text-[#4ec9b0] mb-2 text-sm uppercase">Opublikuj aktualizację</h2>
+                                <h2 className="text-[#4ec9b0] mb-2 text-sm uppercase font-bold">Opublikuj aktualizację</h2>
                                 <p className="text-xs text-gray-400 mb-4">Kod zostanie skompilowany i zapisany do lokalnego jądra systemu, a następnie przesłany siecią P2P (Symulacja).</p>
-                                <button onClick={executePatch} className="w-full bg-[#0e639c] hover:bg-[#1177bb] text-white py-2 font-bold transition">Wykonaj & Opublikuj</button>
+                                <button onClick={executePatch} className="w-full bg-[#0e639c] hover:bg-[#1177bb] text-white py-3 font-bold transition shadow-lg border border-blue-500">Wdróż & Opublikuj (EXECUTE)</button>
                             </div>
                             
                             <div className="flex-1 bg-black border border-[#333] p-2 flex flex-col rounded min-h-0 overflow-hidden">
-                                <span className="text-xs text-gray-500 border-b border-[#333] pb-1 mb-1 block">Terminal O/I P2P</span>
+                                <span className="text-xs text-gray-500 border-b border-[#333] pb-1 mb-1 block uppercase font-bold tracking-widest">Terminal O/I P2P</span>
                                 <div className="flex-1 overflow-auto text-xs whitespace-pre-wrap">
-                                    {logs.map((l, i) => <div key={i} className={l.includes('BŁĄD') ? 'text-red-400' : 'text-green-400'}>{l}</div>)}
-                                    {logs.length === 0 && <div className="text-gray-600">Oczekiwanie na dyspozycje...</div>}
+                                    {logs.map((l, i) => <div key={i} className={l.includes('BŁĄD') ? 'text-red-400' : (l.includes('AI_AGENT') ? 'text-purple-400' : 'text-green-400')}>{l}</div>)}
+                                    {logs.length === 0 && <div className="text-gray-600">Oczekiwanie na dyspozycje... Gotowy.</div>}
                                 </div>
                             </div>
                         </div>
